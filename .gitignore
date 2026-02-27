@@ -16,3 +16,5 @@ Export/
 *.zip
 *.wrk
 *.wrk.*
+*.txt
+*.cywrk.*
