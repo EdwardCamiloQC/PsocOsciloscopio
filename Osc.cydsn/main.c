@@ -38,7 +38,7 @@ CY_ISR(DMA_ISR){
 void DMA_Config(void){
     dmaChannel = DMA_1_DmaInitialize(2, 1, HI16(CYDEV_PERIPH_BASE), HI16(CYDEV_SRAM_BASE));
     
-    dmaTd = CyDmaTdAllocate();
+    dmaTd = CyDmaTdAllocate(); //DMA transfer descriptor
     
     CyDmaTdSetConfiguration(dmaTd, RING_SIZE, dmaTd, TD_INC_DST_ADR | TD_AUTO_EXEC_NEXT);
     CyDmaTdSetAddress(dmaTd, LO16((uint32)ADC_SAR_SAR_WRK0_PTR), LO16((uint32)ringBuffer));
@@ -72,38 +72,22 @@ int main(void){
     DMA_Config();
     
     isrDMA_StartEx(DMA_ISR);
+    
+    uint8 usbInitialized = 0;
 
     for(;;){
         if(USBUART_GetConfiguration() != 0){
+            if(!usbInitialized){
+                USBUART_CDC_Init();
+                usbInitialized = 1;
+            }
             if(USBUART_CDCIsReady()){
                 GetLatestSamples();
                 USBUART_PutData(usbPacket, USB_PACKET_SIZE);
+                //USBUART_PutString("Test\r\n");
             }
+        }else{
+            usbInitialized = 0;
         }
     }
 }
-
-//#include "project.h"
-//
-//int main(void)
-//{
-//    CyGlobalIntEnable;
-//
-//    USBUART_1_Start(0, USBUART_1_5V_OPERATION);
-//
-//    while(USBUART_1_GetConfiguration() == 0)
-//    {
-//        CyDelay(50);
-//    }
-//
-//    CyDelay(200);
-//
-//    for(;;)
-//    {
-//        if(USBUART_1_CDCIsReady())
-//        {
-//            USBUART_1_PutString("OK\r\n");
-//            CyDelay(500);
-//        }
-//    }
-//}
