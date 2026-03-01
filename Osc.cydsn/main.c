@@ -20,6 +20,8 @@ uint8 usbPacket[USB_PACKET_SIZE];
 uint8 dmaChannel;
 uint8 dmaTd;
 
+volatile uint8 muxChannel = 0;
+
 //===============================================
 //========== ISRs
 //===============================================
@@ -29,6 +31,11 @@ CY_ISR(DMA_ISR){
     if(writeIndex >= RING_SIZE){
         writeIndex = 0;
     }
+    muxChannel++;
+    if(muxChannel >= 4){
+        muxChannel = 0;
+    }
+    AMux_1_Select(muxChannel);
 }
 
 
@@ -66,6 +73,8 @@ int main(void){
 
     USBUART_Start(0, USBUART_DWR_VDDD_OPERATION);
     
+    AMux_1_Start();
+    AMux_1_Select(muxChannel);
     ADC_SAR_Start();
     ADC_SAR_StartConvert();
     
@@ -84,7 +93,6 @@ int main(void){
             if(USBUART_CDCIsReady()){
                 GetLatestSamples();
                 USBUART_PutData(usbPacket, USB_PACKET_SIZE);
-                //USBUART_PutString("Test\r\n");
             }
         }else{
             usbInitialized = 0;
