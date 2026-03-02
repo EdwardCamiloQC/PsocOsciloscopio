@@ -3386,14 +3386,14 @@
     <Group key="97fceb85-96d1-4200-a68e-e80b87c32c56">
       <Group key="CortexM3">
         <Data key="Assigned" value="True" />
-        <Data key="Priority" value="6" />
+        <Data key="Priority" value="7" />
         <Data key="Vector" value="-1" />
       </Group>
     </Group>
     <Group key="ffb75095-7779-40b2-9b6f-809c62302329/b73dcd38-4bce-4cd7-acec-33f53e91ccd6">
       <Group key="CortexM3">
         <Data key="Assigned" value="True" />
-        <Data key="Priority" value="6" />
+        <Data key="Priority" value="7" />
         <Data key="Vector" value="-1" />
       </Group>
     </Group>

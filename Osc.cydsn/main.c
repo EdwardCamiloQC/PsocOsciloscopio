@@ -4,10 +4,13 @@
 //===============================================
 //========== MACROS
 //===============================================
-#define CHANNELS          4
-#define BYTES_PER_SAMPLE  (CHANNELS * 2)
-#define RING_SIZE         4096
-#define USB_PACKET_SIZE   64
+#define CHANNELS              4
+#define BYTES_PER_SAMPLE      (CHANNELS * 2)
+#define RING_SIZE             4096
+#define USB_PACKET_SIZE       64
+
+#define DMA_BYTES_PER_BURST   2
+#define DMA_REQUEST_PER_BURST 1
 
 //===============================================
 //========== VARIABLES GLOBALES
@@ -18,7 +21,7 @@ volatile uint16 writeIndex = 0;
 uint8 usbPacket[USB_PACKET_SIZE];
 
 uint8 dmaChannel;
-uint8 dmaTd;
+uint8 dmaTd[1];
 
 volatile uint8 muxChannel = 0;
 
@@ -43,13 +46,14 @@ CY_ISR(DMA_ISR){
 //========== FUNCTIONS
 //===============================================
 void DMA_Config(void){
-    dmaChannel = DMA_1_DmaInitialize(2, 1, HI16(CYDEV_PERIPH_BASE), HI16(CYDEV_SRAM_BASE));
+    dmaChannel = DMA_1_DmaInitialize(DMA_BYTES_PER_BURST, DMA_REQUEST_PER_BURST, HI16(CYDEV_PERIPH_BASE), HI16(CYDEV_SRAM_BASE));
     
-    dmaTd = CyDmaTdAllocate(); //DMA transfer descriptor
+    dmaTd[0] = CyDmaTdAllocate(); //DMA transfer descriptor
     
-    CyDmaTdSetConfiguration(dmaTd, RING_SIZE, dmaTd, TD_INC_DST_ADR | TD_AUTO_EXEC_NEXT);
-    CyDmaTdSetAddress(dmaTd, LO16((uint32)ADC_SAR_SAR_WRK0_PTR), LO16((uint32)ringBuffer));
-    CyDmaChSetInitialTd(dmaChannel, dmaTd);
+    CyDmaTdSetConfiguration(dmaTd[0], RING_SIZE, dmaTd[0], TD_INC_DST_ADR | TD_AUTO_EXEC_NEXT);
+                                                         //DMA_1__TD_TERMOUT_EN
+    CyDmaTdSetAddress(dmaTd[0], LO16((uint32)ADC_SAR_SAR_WRK0_PTR), LO16((uint32)ringBuffer));
+    CyDmaChSetInitialTd(dmaChannel, dmaTd[0]);
     CyDmaChEnable(dmaChannel, 1);
 }
 
@@ -70,17 +74,19 @@ void GetLatestSamples(void){
 //===============================================
 int main(void){
     CyGlobalIntEnable;
+    
+    DMA_Config();
 
     USBUART_Start(0, USBUART_DWR_VDDD_OPERATION);
     
     AMux_1_Start();
     AMux_1_Select(muxChannel);
     ADC_SAR_Start();
-    ADC_SAR_StartConvert();
-    
-    DMA_Config();
+    ADC_SAR_IRQ_Disable();
     
     isrDMA_StartEx(DMA_ISR);
+    
+    ADC_SAR_StartConvert();
     
     uint8 usbInitialized = 0;
 
