@@ -73,6 +73,8 @@ int main(void){
 
     USBUART_Start(0, USBUART_DWR_VDDD_OPERATION);
     //while(){};
+    
+    WaveDAC8_Start();
 
     ADC_SAR_Seq_Start();
     ADC_SAR_Seq_IRQ_Disable();
@@ -87,8 +89,8 @@ int main(void){
                 USBUART_CDC_Init();
                 usbInitialized = 1;
             }
-            if(USBUART_CDCIsReady()){
-                if(flagComplete){
+            if(flagComplete){
+                if(USBUART_CDCIsReady()){
                     USBUART_PutData((uint8*)usbPacketSignals, USB_PACKET_SIZE);
                     flagComplete = 0;
                 }
