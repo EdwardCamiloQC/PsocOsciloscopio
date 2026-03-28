@@ -7,12 +7,11 @@
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //===============================================
 #define CHANNELS              4
-#define BYTES_PER_SAMPLE      (CHANNELS * 2)
-
-#define USB_PACKET_SIZE       32
-
+#define BYTES_PER_SAMPLES     (CHANNELS * 2)
 #define DMA_BYTES_PER_BURST   2
 #define DMA_REQUEST_PER_BURST 1
+
+#define USB_PACKET_SIZE       32
 
 //===============================================
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -33,8 +32,8 @@ uint8 prueba[USB_PACKET_SIZE];
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //===============================================
 CY_ISR(DMA_ISR){
-    CyDmaClearPendingDrq(dmaChannel);
     flagComplete = 1;
+    CyDmaClearPendingDrq(dmaChannel);
 }
 
 
@@ -48,8 +47,8 @@ void DMA_Config(void){
     
     dmaTd[0] = CyDmaTdAllocate(); //DMA transfer descriptor
     
-    CyDmaTdSetConfiguration(dmaTd[0], USB_PACKET_SIZE, dmaTd[0], TD_INC_DST_ADR | TD_AUTO_EXEC_NEXT | DMA_1__TD_TERMOUT_EN);
-    CyDmaTdSetAddress(dmaTd[0], LO16((uint32)ADC_SAR_Seq_SAR_SAR_WRK_PTR), LO16((uint32)usbPacketSignals));
+    CyDmaTdSetConfiguration(dmaTd[0], BYTES_PER_SAMPLES, dmaTd[0], TD_INC_DST_ADR | TD_AUTO_EXEC_NEXT | DMA_1__TD_TERMOUT_EN);
+    CyDmaTdSetAddress(dmaTd[0], LO16((uint32)ADC_SAR_Seq_SAR_SAR_WRK_PTR), LO16((uint32)&usbPacketSignals[4]));
     CyDmaChSetInitialTd(dmaChannel, dmaTd[0]);
     
     isrDMA_StartEx(DMA_ISR);
@@ -65,9 +64,17 @@ void DMA_Config(void){
 int main(void){
     CyGlobalIntEnable;
 
-    for(unsigned int i = 0; i < USB_PACKET_SIZE/2; i++){
-        usbPacketSignals[i] = (0x7E << 8) | 0x7C;
+    usbPacketSignals[0] = (0x7E << 8) | 0x23;
+    for(unsigned int i = 1; i < 4; i++){
+        usbPacketSignals[i] = (0x7E << 8) | 0x7E;
     }
+    for(unsigned int i = 4; i < 8; i++){
+        usbPacketSignals[i] = 0x0000;
+    }
+    for(unsigned int i = 8; i < 15; i++){
+        usbPacketSignals[i] = (0x7C << 8) | 0x7C;
+    }
+    usbPacketSignals[15] = (0x0A << 8) | 0x0D;
 
     DMA_Config();
 
