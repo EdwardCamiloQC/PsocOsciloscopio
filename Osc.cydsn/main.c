@@ -90,7 +90,7 @@ void dma_config(uint8 i){
                 dmaTd[1],
                 BYTES_PER_SAMPLE,
                 dmaTd[1],
-                TD_INC_DST_ADR | TD_AUTO_EXEC_NEXT | DMA_1__TD_TERMOUT_EN
+                TD_INC_DST_ADR | TD_AUTO_EXEC_NEXT | DMA_2__TD_TERMOUT_EN
             );
 
             CyDmaTdSetAddress(
@@ -147,15 +147,17 @@ int main(void){
         if(USBUART_GetConfiguration() != 0){
             if(!usbInitialized){
                 USBUART_CDC_Init();
+                USBUART_PutString("USB OK\r\n");
                 usbInitialized = 1;
+                
             }
-            if(USBUART_CDCIsReady()){
+            if(USBUART_CDCIsReady()){ //Endpoint libre.
                 if(flagComplete1){
                     USBUART_PutData(usbPacketSignal1, USB_PACKET_SIZE);
                     flagComplete1 = 0;
                 }
             }
-            if(USBUART_CDCIsReady()){
+            if(USBUART_CDCIsReady()){ //Endpoint libre.
                 if(flagComplete2){
                     USBUART_PutData(usbPacketSignal2, USB_PACKET_SIZE);
                     flagComplete2 = 0;
