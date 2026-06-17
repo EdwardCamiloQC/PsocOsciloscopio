@@ -12,7 +12,7 @@
 #define BYTES_PER_BURST        1
 #define REQUEST_PER_BURST      1
 
-#define NUM_BUFFERS            16
+#define NUM_BUFFERS            32
 //===============================================
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // GLOBALS
