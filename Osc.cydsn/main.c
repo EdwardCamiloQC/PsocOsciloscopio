@@ -8,8 +8,10 @@
 //===============================================
 #define USB_PACKET_SIZE        64
 
-#define BYTES_PER_SAMPLE       (USB_PACKET_SIZE - 1)
-#define BYTES_PER_BURST        1
+#define BYTES_ADC              2
+#define SAMPLES_PER_PACKET     (USB_PACKET_SIZE/BYTES_ADC)
+#define DMA_TRANSFER_BYTES     ((SAMPLES_PER_PACKET*BYTES_ADC)-2)
+#define BYTES_PER_BURST        2
 #define REQUEST_PER_BURST      1
 
 #define NUM_BUFFERS            32
@@ -18,14 +20,14 @@
 // GLOBALS
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //===============================================
-uint8 voltageBuffer1[NUM_BUFFERS][USB_PACKET_SIZE];
+uint16 voltageBuffer1[NUM_BUFFERS][SAMPLES_PER_PACKET];
 volatile uint8 indWriteBuf1 = 0;
 volatile uint8 indReadBuf1 = 0;
 volatile uint8 nReadyBuf1 = 0;
 uint8 channelDMA1;
 uint8 tdDMA1[NUM_BUFFERS]; //Transfer Descriptors;
 
-uint8 voltageBuffer2[NUM_BUFFERS][USB_PACKET_SIZE];
+uint16 voltageBuffer2[NUM_BUFFERS][SAMPLES_PER_PACKET];
 volatile uint8 indWriteBuf2 = 0;
 volatile uint8 indReadBuf2 = 0;
 volatile uint8 nReadyBuf2 = 0;
@@ -85,7 +87,7 @@ void dma_config(uint8 i){
                 uint8 next = (i+1)%NUM_BUFFERS;
                 CyDmaTdSetConfiguration( 
                     tdDMA1[i],
-                    BYTES_PER_SAMPLE,
+                    DMA_TRANSFER_BYTES,
                     tdDMA1[next],
                     TD_INC_DST_ADR |
                     TD_AUTO_EXEC_NEXT |
@@ -121,7 +123,7 @@ void dma_config(uint8 i){
                 uint8 next = (i+1)%NUM_BUFFERS;
                 CyDmaTdSetConfiguration(
                     tdDMA2[i],
-                    BYTES_PER_SAMPLE,
+                    DMA_TRANSFER_BYTES,
                     tdDMA2[next],
                     TD_INC_DST_ADR |
                     TD_AUTO_EXEC_NEXT |
@@ -146,10 +148,10 @@ void dma_config(uint8 i){
     }
 }
 
-void signals_to_zero(uint8 data[][USB_PACKET_SIZE], uint8 num){
+void signals_to_zero(uint16 data[][SAMPLES_PER_PACKET], uint8 num){
     for(uint8 j=0; j<NUM_BUFFERS; j++){
         data[j][0] = num;
-        for(uint8_t i = 1; i < USB_PACKET_SIZE; i++){
+        for(uint8_t i = 1; i < SAMPLES_PER_PACKET; i++){
             data[j][i] = 0x00;
         }
     }
@@ -191,7 +193,7 @@ int main(void){
             }
             if(USBUART_CDCIsReady()){ //Endpoint libre.
                 if(nReadyBuf1){
-                    USBUART_PutData(voltageBuffer1[indReadBuf1], USB_PACKET_SIZE);
+                    USBUART_PutData((uint8*)voltageBuffer1[indReadBuf1], USB_PACKET_SIZE);
                     indReadBuf1++;
                     if(indReadBuf1 >= NUM_BUFFERS){
                         indReadBuf1 = 0;
@@ -201,7 +203,7 @@ int main(void){
             }
             if(USBUART_CDCIsReady()){ //Endpoint libre.
                 if(nReadyBuf2){
-                    USBUART_PutData(voltageBuffer2[indReadBuf2], USB_PACKET_SIZE);
+                    USBUART_PutData((uint8*)voltageBuffer2[indReadBuf2], USB_PACKET_SIZE);
                     indReadBuf2++;
                     if(indReadBuf2 >= NUM_BUFFERS){
                         indReadBuf2 = 0;
