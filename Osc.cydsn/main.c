@@ -1,6 +1,7 @@
 #include "project.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdatomic.h>
 //===============================================
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // DEFINES
@@ -23,14 +24,14 @@
 uint16 voltageBuffer1[NUM_BUFFERS][SAMPLES_PER_PACKET];
 volatile uint8 indWriteBuf1 = 0;
 volatile uint8 indReadBuf1 = 0;
-volatile uint8 nReadyBuf1 = 0;
+uint8 nReadyBuf1 = 0;
 uint8 channelDMA1;
 uint8 tdDMA1[NUM_BUFFERS]; //Transfer Descriptors;
 
 uint16 voltageBuffer2[NUM_BUFFERS][SAMPLES_PER_PACKET];
 volatile uint8 indWriteBuf2 = 0;
 volatile uint8 indReadBuf2 = 0;
-volatile uint8 nReadyBuf2 = 0;
+uint8 nReadyBuf2 = 0;
 uint8 channelDMA2;
 uint8 tdDMA2[NUM_BUFFERS]; //Transfer Descriptors.
 volatile uint8 pingpongDMA2 = 0;
@@ -43,24 +44,28 @@ char mensaje[100];
 //===============================================
 CY_ISR(DMA1_ISR){
     indWriteBuf1++;
-
     if(indWriteBuf1 >= NUM_BUFFERS){
         indWriteBuf1 = 0;
     }
 
-    nReadyBuf1++;
+    atomic_fetch_add(&nReadyBuf1, 1);
+    if(atomic_load(&nReadyBuf1) > NUM_BUFFERS){
+        atomic_store(&nReadyBuf1, NUM_BUFFERS);
+    }
 
     CyDmaClearPendingDrq(channelDMA1);
 }
 
 CY_ISR(DMA2_ISR){
     indWriteBuf2++;
-
     if(indWriteBuf2 >= NUM_BUFFERS){
         indWriteBuf2 = 0;
     }
 
-    nReadyBuf2++;
+    atomic_fetch_add(&nReadyBuf2, 1);
+    if(atomic_load(&nReadyBuf2) > NUM_BUFFERS){
+        atomic_store(&nReadyBuf2, NUM_BUFFERS);
+    }
 
     CyDmaClearPendingDrq(channelDMA2);
 }
@@ -148,9 +153,9 @@ void dma_config(uint8 i){
     }
 }
 
-void signals_to_zero(uint16 data[][SAMPLES_PER_PACKET], uint8 num){
+void signals_to_zero(uint16 data[][SAMPLES_PER_PACKET], uint16 num){
     for(uint8 j=0; j<NUM_BUFFERS; j++){
-        data[j][0] = num;
+        data[j][0] = (num<<13) | 0x1145; //num1___1'E'
         for(uint8_t i = 1; i < SAMPLES_PER_PACKET; i++){
             data[j][i] = 0x00;
         }
@@ -198,7 +203,7 @@ int main(void){
                     if(indReadBuf1 >= NUM_BUFFERS){
                         indReadBuf1 = 0;
                     }
-                    nReadyBuf1--;
+                    atomic_fetch_sub(&nReadyBuf1, 1);
                 }
             }
             if(USBUART_CDCIsReady()){ //Endpoint libre.
@@ -208,7 +213,7 @@ int main(void){
                     if(indReadBuf2 >= NUM_BUFFERS){
                         indReadBuf2 = 0;
                     }
-                    nReadyBuf2--;
+                    atomic_fetch_sub(&nReadyBuf2, 1);
                 }
             }
         }else{
