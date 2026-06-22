@@ -54,7 +54,6 @@ CY_ISR(DMA1_ISR){
         CyDmaClearPendingDrq(channelDMA1);
     }else{
         CyDmaChDisable(channelDMA1);
-        atomic_store(&indPack, NUM_BUFFERS);
         atomic_store(&indDMA1, 0);
     }
 }
@@ -69,7 +68,6 @@ CY_ISR(DMA2_ISR){
         CyDmaClearPendingDrq(channelDMA2);
     }else{
         CyDmaChDisable(channelDMA2);
-        atomic_store(&indPack, NUM_BUFFERS);
         atomic_store(&indDMA2 ,0);
     }
 }
@@ -203,11 +201,13 @@ int main(void){
                     if(indRead >= NUM_BUFFERS){
                         indRead = 0;
                     }
-                    atomic_fetch_sub(&indPack, 1);
-                    CyDmaClearPendingDrq(channelDMA1);
-                    CyDmaClearPendingDrq(channelDMA2);
-                    CyDmaChEnable(channelDMA1, 1);
-                    CyDmaChEnable(channelDMA2, 1);
+                    uint8 oldPack = atomic_fetch_sub(&indPack, 1);
+                    if(oldPack == 0){
+                        CyDmaClearPendingDrq(channelDMA1);
+                        CyDmaClearPendingDrq(channelDMA2);
+                        CyDmaChEnable(channelDMA1, 1);
+                        CyDmaChEnable(channelDMA2, 1);
+                    }
                 }
             }
         }else{
