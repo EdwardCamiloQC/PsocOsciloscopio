@@ -1,6 +1,7 @@
 #include "project.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdatomic.h>
 //===============================================
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -12,31 +13,33 @@
 #define BYTES_ADC              2
 #define SAMPLES_PER_PACKET     (USB_PACKET_SIZE/BYTES_ADC) //32 samples
 
-#define DMA_TRANSFER_BYTES     ((SAMPLES_PER_PACKET)-2) //30 bytes
-#define SAMPLES_PER_DMA        ((SAMPLES_PER_PACKET/2)-2) //15 samples per DMA -> time_irq=15/444444
+#define DMA_TRANSFER_BYTES     ((USB_PACKET_SIZE)-2) //62 bytes
+#define SAMPLES_PER_DMA        ((SAMPLES_PER_PACKET)-1) //31 samples per DMA -> time_irq=31/444444
 #define BYTES_PER_BURST        2
 #define REQUEST_PER_BURST      1
 
-#define NUM_BUFFERS            32
+#define NUM_BUFFERS            16
 //===============================================
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // GLOBALS
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //===============================================
-uint16 usbPacket[NUM_BUFFERS][SAMPLES_PER_PACKET];
+uint16 usbPacket1[NUM_BUFFERS][SAMPLES_PER_PACKET];
+uint16 usbPacket2[NUM_BUFFERS][SAMPLES_PER_PACKET];
 
-
-uint8 indPack = 0;
-volatile uint8 indRead = 0;
-uint8 indDMA1 = 0;
-uint8 indDMA2 = 0;
+volatile bool pivot = false; //false->usbPacket1, true->usbPacket2
+volatile uint8 writeDMA1 = 0;
+volatile uint8 readDMA1;
+volatile uint8 writeDMA2 = 0;
+volatile uint8 readDMA2;
+volatile bool newData1 = false;
+volatile bool newData2 = false;
 
 uint8 channelDMA1;
 uint8 tdDMA1[NUM_BUFFERS]; //Transfer Descriptors;
 
 uint8 channelDMA2;
 uint8 tdDMA2[NUM_BUFFERS]; //Transfer Descriptors.
-volatile uint8 pingpongDMA2 = 0;
 
 char mensaje[100];
 //===============================================
@@ -45,31 +48,25 @@ char mensaje[100];
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //===============================================
 CY_ISR(DMA1_ISR){
-    atomic_fetch_add(&indDMA1, 1);
-
-    if(atomic_load(&indDMA1) <= atomic_load(&indDMA2))
-        atomic_fetch_add(&indPack, 1);
-
-    if(atomic_load(&indPack) < NUM_BUFFERS){
-        CyDmaClearPendingDrq(channelDMA1);
-    }else{
-        CyDmaChDisable(channelDMA1);
-        atomic_store(&indDMA1, 0);
+    readDMA1 = writeDMA1;
+    writeDMA1++;
+    if(writeDMA1 >= NUM_BUFFERS){
+        writeDMA1 = 0;
     }
+    newData1 = true;
+
+    CyDmaClearPendingDrq(channelDMA1);
 }
 
 CY_ISR(DMA2_ISR){
-    atomic_fetch_add(&indDMA2, 1);
-
-    if(atomic_load(&indDMA2) <= atomic_load(&indDMA1))
-        atomic_fetch_add(&indPack, 1);
-
-    if(atomic_load(&indPack) < NUM_BUFFERS){
-        CyDmaClearPendingDrq(channelDMA2);
-    }else{
-        CyDmaChDisable(channelDMA2);
-        atomic_store(&indDMA2 ,0);
+    readDMA2 = writeDMA2;
+    writeDMA2++;
+    if(writeDMA2 >= NUM_BUFFERS){
+        writeDMA2 = 0;
     }
+    newData2 = true;
+
+    CyDmaClearPendingDrq(channelDMA2);
 }
 //===============================================
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -104,7 +101,7 @@ void dma_config(uint8 i){
                 CyDmaTdSetAddress(
                     tdDMA1[i],
                     LO16((uint32)ADC_SAR_1_SAR_WRK_PTR),
-                    LO16((uint32)&usbPacket[i][1])
+                    LO16((uint32)&usbPacket1[i][1])
                 );
             }
 
@@ -140,7 +137,7 @@ void dma_config(uint8 i){
                 CyDmaTdSetAddress(
                     tdDMA2[i],
                     LO16((uint32)ADC_SAR_2_SAR_WRK_PTR),
-                    LO16((uint32)&usbPacket[i][17])
+                    LO16((uint32)&usbPacket2[i][1])
                 );
             }
 
@@ -155,10 +152,9 @@ void dma_config(uint8 i){
     }
 }
 
-void reset_packet(uint16 data[][SAMPLES_PER_PACKET]){
+void reset_packet(uint16 data[][SAMPLES_PER_PACKET], uint8 num){
     for(uint8 j=0; j<NUM_BUFFERS; j++){
-        data[j][0]  = (1<<13) | 0x1145;
-        data[j][16] = (1<<14) | 0x1144;
+        data[j][0]  = (num<<13) | 0x1145;
     }
 }
 //===============================================
@@ -169,7 +165,8 @@ void reset_packet(uint16 data[][SAMPLES_PER_PACKET]){
 int main(void){
     CyGlobalIntEnable;
 
-    reset_packet(usbPacket);
+    reset_packet(usbPacket1, 1);
+    reset_packet(usbPacket2, 2);
 
     dma_config(1);
     dma_config(2);
@@ -195,20 +192,20 @@ int main(void){
                 usbInitialized = 1;
             }
             if(USBUART_CDCIsReady()){ //Endpoint libre.
-                if(indPack){
-                    USBUART_PutData((uint8*)usbPacket[indRead], USB_PACKET_SIZE);
-                    indRead++;
-                    if(indRead >= NUM_BUFFERS){
-                        indRead = 0;
+                if(!pivot){
+                    if(newData1){
+                        USBUART_PutData((uint8*)usbPacket2[readDMA1], USB_PACKET_SIZE);
+                        newData1 = false;
+                        pivot = true;
                     }
-                    uint8 oldPack = atomic_fetch_sub(&indPack, 1);
-                    if(oldPack == 0){
-                        CyDmaClearPendingDrq(channelDMA1);
-                        CyDmaClearPendingDrq(channelDMA2);
-                        CyDmaChEnable(channelDMA1, 1);
-                        CyDmaChEnable(channelDMA2, 1);
+                }else{
+                    if(newData2){
+                        USBUART_PutData((uint8*)usbPacket1[readDMA2], USB_PACKET_SIZE);
+                        newData2 = false;
+                        pivot = false;
                     }
                 }
+                pivot = !pivot;
             }
         }else{
             usbInitialized = 0;
