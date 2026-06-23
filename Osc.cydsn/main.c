@@ -18,7 +18,7 @@
 #define BYTES_PER_BURST        2
 #define REQUEST_PER_BURST      1
 
-#define NUM_BUFFERS            16
+#define NUM_BUFFERS            4
 //===============================================
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // GLOBALS
@@ -205,7 +205,6 @@ int main(void){
                         pivot = false;
                     }
                 }
-                pivot = !pivot;
             }
         }else{
             usbInitialized = 0;
