@@ -18,7 +18,7 @@
 #define BYTES_PER_BURST        2
 #define REQUEST_PER_BURST      1
 
-#define NUM_BUFFERS            4
+#define NUM_BUFFERS            2 //Ping-Pong
 //===============================================
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // GLOBALS
@@ -49,23 +49,15 @@ char mensaje[100];
 //===============================================
 CY_ISR(DMA1_ISR){
     readDMA1 = writeDMA1;
-    writeDMA1++;
-    if(writeDMA1 >= NUM_BUFFERS){
-        writeDMA1 = 0;
-    }
+    writeDMA1 ^= 1;
     newData1 = true;
-
     CyDmaClearPendingDrq(channelDMA1);
 }
 
 CY_ISR(DMA2_ISR){
     readDMA2 = writeDMA2;
-    writeDMA2++;
-    if(writeDMA2 >= NUM_BUFFERS){
-        writeDMA2 = 0;
-    }
+    writeDMA2 ^= 1;
     newData2 = true;
-
     CyDmaClearPendingDrq(channelDMA2);
 }
 //===============================================
