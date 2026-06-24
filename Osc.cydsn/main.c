@@ -186,13 +186,13 @@ int main(void){
             if(USBUART_CDCIsReady()){ //Endpoint libre.
                 if(!pivot){
                     if(newData1){
-                        USBUART_PutData((uint8*)usbPacket2[readDMA1], USB_PACKET_SIZE);
+                        USBUART_PutData((uint8*)usbPacket1[readDMA1], USB_PACKET_SIZE);
                         newData1 = false;
                         pivot = true;
                     }
                 }else{
                     if(newData2){
-                        USBUART_PutData((uint8*)usbPacket1[readDMA2], USB_PACKET_SIZE);
+                        USBUART_PutData((uint8*)usbPacket2[readDMA2], USB_PACKET_SIZE);
                         newData2 = false;
                         pivot = false;
                     }
