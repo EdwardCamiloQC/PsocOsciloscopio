@@ -1,7 +1,5 @@
 #include "project.h"
 #include <stdlib.h>
-#include <stdio.h>
-#include <stdbool.h>
 #include <stdatomic.h>
 //===============================================
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -28,6 +26,7 @@ uint16 usbPacket[NUM_BUFFERS][SAMPLES_PER_PACKET];
 
 volatile uint8 writeBuffer = 0;
 volatile uint8 lastBuffer = 0;
+volatile uint8 numPacket = 0;
 
 uint8 channelDMA1;
 uint8 tdDMA1[NUM_BUFFERS]; //Transfer Descriptors;
@@ -44,6 +43,15 @@ CY_ISR(DMA1_ISR){
     if(writeBuffer >= NUM_BUFFERS){
         writeBuffer = 0;
     }
+
+    usbPacket[lastBuffer][0] = (usbPacket[lastBuffer][0] & 0xFF00) | numPacket;
+
+    if(numPacket != 255){
+        numPacket++;
+    }else{
+        numPacket = 0;
+    }
+
     CyDmaClearPendingDrq(channelDMA1);
 }
 //===============================================
