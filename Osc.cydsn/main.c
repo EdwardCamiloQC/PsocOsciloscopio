@@ -18,28 +18,19 @@
 #define BYTES_PER_BURST        2
 #define REQUEST_PER_BURST      1
 
-#define NUM_BUFFERS            2 //Ping-Pong
+#define NUM_BUFFERS            16
 //===============================================
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // GLOBALS
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //===============================================
-uint16 usbPacket1[NUM_BUFFERS][SAMPLES_PER_PACKET];
-uint16 usbPacket2[NUM_BUFFERS][SAMPLES_PER_PACKET];
+uint16 usbPacket[NUM_BUFFERS][SAMPLES_PER_PACKET];
 
-volatile bool pivot = false; //false->usbPacket1, true->usbPacket2
-volatile uint8 writeDMA1 = 0;
-volatile uint8 readDMA1;
-volatile uint8 writeDMA2 = 0;
-volatile uint8 readDMA2;
-volatile bool newData1 = false;
-volatile bool newData2 = false;
+volatile uint8 writeBuffer = 0;
+volatile uint8 lastBuffer = 0;
 
 uint8 channelDMA1;
 uint8 tdDMA1[NUM_BUFFERS]; //Transfer Descriptors;
-
-uint8 channelDMA2;
-uint8 tdDMA2[NUM_BUFFERS]; //Transfer Descriptors.
 
 char mensaje[100];
 //===============================================
@@ -48,100 +39,57 @@ char mensaje[100];
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //===============================================
 CY_ISR(DMA1_ISR){
-    readDMA1 = writeDMA1;
-    writeDMA1 ^= 1;
-    newData1 = true;
+    lastBuffer = writeBuffer;
+    writeBuffer++;
+    if(writeBuffer >= NUM_BUFFERS){
+        writeBuffer = 0;
+    }
     CyDmaClearPendingDrq(channelDMA1);
-}
-
-CY_ISR(DMA2_ISR){
-    readDMA2 = writeDMA2;
-    writeDMA2 ^= 1;
-    newData2 = true;
-    CyDmaClearPendingDrq(channelDMA2);
 }
 //===============================================
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // FUNCTIONS
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //===============================================
-void dma_config(uint8 i){
-    switch(i){
-        case 1:
-            channelDMA1 = DMA_1_DmaInitialize(
-                BYTES_PER_BURST,
-                REQUEST_PER_BURST,
-                HI16(CYDEV_PERIPH_BASE),
-                HI16(CYDEV_SRAM_BASE)
-            );
+void dma_config(){
+    channelDMA1 = DMA_1_DmaInitialize(
+        BYTES_PER_BURST,
+        REQUEST_PER_BURST,
+        HI16(CYDEV_PERIPH_BASE),
+        HI16(CYDEV_SRAM_BASE)
+    );
 
-            for(uint8 i=0; i<NUM_BUFFERS; i++){
-                tdDMA1[i] = CyDmaTdAllocate(); //Reserva los TD.
-            }
-
-            for(uint8 i=0; i<NUM_BUFFERS; i++){
-                uint8 next = (i+1)%NUM_BUFFERS;
-                CyDmaTdSetConfiguration( 
-                    tdDMA1[i],
-                    DMA_TRANSFER_BYTES,
-                    tdDMA1[next],
-                    TD_INC_DST_ADR |
-                    TD_AUTO_EXEC_NEXT |
-                    DMA_1__TD_TERMOUT_EN
-                );
-
-                CyDmaTdSetAddress(
-                    tdDMA1[i],
-                    LO16((uint32)ADC_SAR_1_SAR_WRK_PTR),
-                    LO16((uint32)&usbPacket1[i][1])
-                );
-            }
-
-            CyDmaChSetInitialTd(channelDMA1, tdDMA1[0]);
-
-            isr_1_StartEx(DMA1_ISR);
-
-            CyDmaChEnable(channelDMA1, 1);
-            break;
-        case 2:
-            channelDMA2 = DMA_2_DmaInitialize(
-                BYTES_PER_BURST,
-                REQUEST_PER_BURST,
-                HI16(CYDEV_PERIPH_BASE),
-                HI16(CYDEV_SRAM_BASE)
-            );
-
-            for(uint8 i=0; i<NUM_BUFFERS; i++){
-                tdDMA2[i] = CyDmaTdAllocate();
-            }
-            
-            for(uint8 i=0; i<NUM_BUFFERS; i++){
-                uint8 next = (i+1)%NUM_BUFFERS;
-                CyDmaTdSetConfiguration(
-                    tdDMA2[i],
-                    DMA_TRANSFER_BYTES,
-                    tdDMA2[next],
-                    TD_INC_DST_ADR |
-                    TD_AUTO_EXEC_NEXT |
-                    DMA_2__TD_TERMOUT_EN
-                );
-
-                CyDmaTdSetAddress(
-                    tdDMA2[i],
-                    LO16((uint32)ADC_SAR_2_SAR_WRK_PTR),
-                    LO16((uint32)&usbPacket2[i][1])
-                );
-            }
-
-            CyDmaChSetInitialTd(channelDMA2, tdDMA2[0]);
-    
-            isr_2_StartEx(DMA2_ISR);
-
-            CyDmaChEnable(channelDMA2, 1);
-            break;
-        default:
-            break;
+    for(uint8 i=0; i<NUM_BUFFERS; i++){
+        tdDMA1[i] = CyDmaTdAllocate(); //Reserva los TD.
+        if(tdDMA1[i] == DMA_INVALID_TD){
+            while(1);
+        }
     }
+
+    for(uint8 i=0; i<NUM_BUFFERS; i++){
+        uint8 next = (i+1)%NUM_BUFFERS;
+        CyDmaTdSetConfiguration( 
+            tdDMA1[i],
+            DMA_TRANSFER_BYTES,
+            tdDMA1[next],
+            TD_INC_DST_ADR |
+            TD_AUTO_EXEC_NEXT |
+            DMA_1__TD_TERMOUT_EN
+        );
+
+        CyDmaTdSetAddress(
+            tdDMA1[i],
+            LO16((uint32)ADC_SAR_1_SAR_WRK_PTR),
+            LO16((uint32)&usbPacket[i][1])
+        );
+    }
+
+    CyDmaChSetInitialTd(channelDMA1, tdDMA1[0]);
+
+    isr_1_StartEx(DMA1_ISR);
+
+    CyDmaChEnable(channelDMA1, 1);
+            
 }
 
 void reset_packet(uint16 data[][SAMPLES_PER_PACKET], uint8 num){
@@ -154,52 +102,44 @@ void reset_packet(uint16 data[][SAMPLES_PER_PACKET], uint8 num){
 // MAIN
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //===============================================
-int main(void){
+int main(void)
+{
     CyGlobalIntEnable;
 
-    reset_packet(usbPacket1, 1);
-    reset_packet(usbPacket2, 2);
+    uint8 usbInitialized = 0;
 
-    dma_config(1);
-    dma_config(2);
+    static uint8 copyPacket[USB_PACKET_SIZE];
+
+    reset_packet(usbPacket, 1);
+
+    dma_config();
 
     USBUART_Start(0, USBUART_DWR_VDDD_OPERATION);
-    //while(){};
 
     WaveDAC8_Start();
 
     ADC_SAR_1_Start();
     ADC_SAR_1_StartConvert();
 
-    ADC_SAR_2_Start();
-    ADC_SAR_2_StartConvert();
-
-    uint8 usbInitialized = 0;
-
     for(;;){
-        if(USBUART_GetConfiguration() != 0){
-            if(!usbInitialized){
+        if(USBUART_IsConfigurationChanged()){
+            if(USBUART_GetConfiguration() && !usbInitialized){
                 USBUART_CDC_Init();
-                USBUART_PutString("USB OK\r\n");
                 usbInitialized = 1;
             }
-            if(USBUART_CDCIsReady()){ //Endpoint libre.
-                if(!pivot){
-                    if(newData1){
-                        USBUART_PutData((uint8*)usbPacket1[readDMA1], USB_PACKET_SIZE);
-                        newData1 = false;
-                        pivot = true;
-                    }
-                }else{
-                    if(newData2){
-                        USBUART_PutData((uint8*)usbPacket2[readDMA2], USB_PACKET_SIZE);
-                        newData2 = false;
-                        pivot = false;
-                    }
-                }
-            }
-        }else{
-            usbInitialized = 0;
+        }
+
+        if(USBUART_CDCIsReady()){
+            uint8 idx;
+            uint8 intrState;
+
+            intrState = CyEnterCriticalSection();
+            idx = lastBuffer;
+            CyExitCriticalSection(intrState);
+
+            memcpy(copyPacket, (uint8*)usbPacket[idx], USB_PACKET_SIZE);
+
+            USBUART_PutData(copyPacket, USB_PACKET_SIZE);
         }
     }
 }
