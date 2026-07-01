@@ -5,13 +5,13 @@
 // DEFINES
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //===============================================
-#define TD_BYTES_SIZE            1000
+#define TD_BYTES_SIZE            512
 
 #define BYTES_ADC                2
-#define SAMPLES_PER_TD           (TD_BYTES_SIZE/BYTES_ADC)//500 samples
+#define SAMPLES_PER_TD           (TD_BYTES_SIZE/BYTES_ADC)//256 samples
 
-#define DMA_TRANSFER_BYTES       ((TD_BYTES_SIZE)-BYTES_ADC)//998 bytes
-#define SAMPLES_PER_DMA          ((SAMPLES_PER_TD)-1)//499 samples per DMA -> tirq ≈ 1.1227ms
+#define DMA_TRANSFER_BYTES       ((TD_BYTES_SIZE)-BYTES_ADC)//510 bytes
+#define SAMPLES_PER_DMA          ((SAMPLES_PER_TD)-1)//255 samples per DMA -> tirq ≈ 0.57375ms
 #define BYTES_PER_BURST          2
 #define REQUEST_PER_BURST        1
 
@@ -49,8 +49,8 @@ CY_ISR(DMA1_ISR){
         numPacket = 0;
     }
     
-    if(USBUART_CDCIsReady()){
-        USBUART_PutData((uint8*)&voltage1[lastBuffer], 64);
+    if(USBFS_1_GetEPState(1) == USBFS_1_IN_BUFFER_EMPTY){
+        USBFS_1_LoadInEP(1, (uint8*)&voltage1[lastBuffer], TD_BYTES_SIZE);
     }
 }
 //===============================================
@@ -118,7 +118,7 @@ int main(void){
 
     dma_config();
 
-    USBUART_Start(0, USBUART_DWR_VDDD_OPERATION);
+    USBFS_1_Start(0, USBFS_1_DWR_VDDD_OPERATION);
 
     WaveDAC8_Start();
 
@@ -126,9 +126,9 @@ int main(void){
     ADC_SAR_1_StartConvert();
 
     for(;;){
-        if(USBUART_IsConfigurationChanged()){
-            if(USBUART_GetConfiguration() && !usbInitialized){
-                USBUART_CDC_Init();
+        if(USBFS_1_IsConfigurationChanged()){
+            if(USBFS_1_GetConfiguration() && !usbInitialized){
+                USBFS_1_Init();
                 usbInitialized = 1;
             }
         }
