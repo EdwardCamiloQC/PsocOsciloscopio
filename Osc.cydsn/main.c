@@ -1,5 +1,4 @@
 #include "project.h"
-#include <stdlib.h>
 //===============================================
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // DEFINES
@@ -8,10 +7,10 @@
 #define TD_BYTES_SIZE            512
 
 #define BYTES_ADC                2
-#define SAMPLES_PER_TD           (TD_BYTES_SIZE/BYTES_ADC)//256 samples
+#define SAMPLES_PER_TD           (TD_BYTES_SIZE / BYTES_ADC) //256 samples
 
-#define DMA_TRANSFER_BYTES       ((TD_BYTES_SIZE)-BYTES_ADC)//510 bytes
-#define SAMPLES_PER_DMA          ((SAMPLES_PER_TD)-1)//255 samples per DMA -> tirq ≈ 0.57375ms
+#define DMA_TRANSFER_BYTES       (TD_BYTES_SIZE - BYTES_ADC) //510 bytes
+#define SAMPLES_PER_DMA          (SAMPLES_PER_TD - 1) //255 samples per DMA -> tirq ≈ 0.57375ms
 #define BYTES_PER_BURST          2
 #define REQUEST_PER_BURST        1
 
@@ -21,7 +20,7 @@
 // GLOBALS
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //===============================================
-uint16 voltage1[NUM_TRANSFER_DESCRIPTORS][TD_BYTES_SIZE];
+uint16 voltage1[NUM_TRANSFER_DESCRIPTORS][SAMPLES_PER_TD];
 
 volatile uint8 writeBuffer = 0;
 volatile uint8 lastBuffer = 0;
@@ -80,7 +79,6 @@ void dma_config(){
             DMA_TRANSFER_BYTES,
             tdDMA1[next],
             TD_INC_DST_ADR |
-            TD_AUTO_EXEC_NEXT |
             DMA_1__TD_TERMOUT_EN
         );
 
@@ -99,7 +97,7 @@ void dma_config(){
             
 }
 
-void reset_packet(uint16 data[][TD_BYTES_SIZE], uint8 num){
+void reset_packet(uint16 data[][SAMPLES_PER_TD], uint8 num){
     for(uint8 j=0; j<NUM_TRANSFER_DESCRIPTORS; j++){
         data[j][0]  = (num<<13) | 0x1145;
     }
